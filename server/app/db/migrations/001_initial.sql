@@ -24,7 +24,9 @@ CREATE TABLE calls (
 CREATE INDEX ON calls (agent_id);
 CREATE INDEX ON calls (status);
 
--- Redacted transcripts only — raw text is never persisted
+-- Redacted transcripts only — raw text is never persisted.
+-- redacted_text is stored via pgp_sym_encrypt() at the application layer (redaction.py).
+-- Reads use pgp_sym_decrypt() with the ENCRYPTION_KEY env var. Column type is TEXT to hold ciphertext.
 CREATE TABLE transcripts (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   call_id       UUID UNIQUE REFERENCES calls(id),
