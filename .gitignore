@@ -1,0 +1,54 @@
+# Node
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# Build output
+dist/
+dist-ssr/
+build/
+coverage/
+
+# Vite
+.vite/
+
+# Env files (.env.example files ARE committed)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+.venv/
+.pytest_cache/
+*.egg-info/
+.ruff_cache/
+.uv/
+.coverage
+htmlcov/
+*.log
+
+# pyenv
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.orig
+
+# Security artifacts — never commit
+*.pem
+*.key
+
+# Temp
+tmp/
+.tmp/
