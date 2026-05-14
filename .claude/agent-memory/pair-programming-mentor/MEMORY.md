@@ -1,0 +1,1 @@
+- [Developer Profile](user_profile.md) — early career, comfortable with React/hooks, new to testing frameworks (Vitest/RTL/MSW)
