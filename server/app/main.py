@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import webhooks
+from app.api import agents, calls, webhooks
 from app.config import get_settings
 from app.db.pool import create_pool
 
@@ -26,6 +26,8 @@ app.add_middleware(
 )
 
 app.include_router(webhooks.router)
+app.include_router(calls.router)
+app.include_router(agents.router)
 
 
 @app.get("/health")

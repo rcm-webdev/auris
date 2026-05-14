@@ -99,3 +99,132 @@ async def append_audit(
             event,
             _json.dumps(metadata) if metadata else None,
         )
+
+
+async def list_calls(
+    pool: asyncpg.Pool,
+    agent_id: str | None = None,
+    status: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+) -> tuple[list[dict], int]:
+    conditions: list[str] = []
+    params: list = []
+    idx = 1
+
+    if agent_id:
+        conditions.append(f"c.agent_id = ${idx}::UUID")
+        params.append(agent_id)
+        idx += 1
+    if status:
+        conditions.append(f"c.status = ${idx}")
+        params.append(status)
+        idx += 1
+    if from_date:
+        conditions.append(f"c.called_at >= ${idx}::TIMESTAMPTZ")
+        params.append(from_date)
+        idx += 1
+    if to_date:
+        conditions.append(f"c.called_at <= ${idx}::TIMESTAMPTZ")
+        params.append(to_date)
+        idx += 1
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    offset = (page - 1) * limit
+
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(f"SELECT COUNT(*) FROM calls c {where}", *params)
+        rows = await conn.fetch(
+            f"""
+            SELECT c.id::TEXT, c.twilio_call_sid, c.duration_seconds, c.called_at, c.status,
+                   a.id::TEXT AS agent_id, a.name AS agent_name
+            FROM calls c LEFT JOIN agents a ON a.id = c.agent_id
+            {where}
+            ORDER BY c.called_at DESC NULLS LAST
+            LIMIT ${idx} OFFSET ${idx + 1}
+            """,
+            *params,
+            limit,
+            offset,
+        )
+    return [dict(r) for r in rows], total
+
+
+async def get_call(pool: asyncpg.Pool, call_id: str) -> dict | None:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT c.id::TEXT, c.twilio_call_sid, c.recording_url,
+                   c.duration_seconds, c.called_at, c.status,
+                   a.id::TEXT AS agent_id, a.name AS agent_name,
+                   pgp_sym_decrypt(t.redacted_text::bytea, $2) AS redacted_text,
+                   t.whisper_model,
+                   o.summary, o.disposition, o.next_action
+            FROM calls c
+            LEFT JOIN agents a ON a.id = c.agent_id
+            LEFT JOIN transcripts t ON t.call_id = c.id
+            LEFT JOIN outcomes o ON o.call_id = c.id
+            WHERE c.id = $1::UUID
+            """,
+            call_id,
+            get_settings().encryption_key,
+        )
+    return dict(row) if row else None
+
+
+async def get_call_audit(pool: asyncpg.Pool, call_id: str) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id::TEXT, event, actor, metadata, created_at
+            FROM audit_log WHERE call_id = $1::UUID ORDER BY created_at ASC
+            """,
+            call_id,
+        )
+    return [dict(r) for r in rows]
+
+
+async def list_agents(pool: asyncpg.Pool) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT a.id::TEXT, a.name, a.email, a.created_at,
+                   COUNT(c.id) AS total_calls,
+                   COUNT(c.id) FILTER (WHERE c.status = 'extracted') AS completed_calls
+            FROM agents a LEFT JOIN calls c ON c.agent_id = a.id
+            GROUP BY a.id ORDER BY a.name ASC
+            """,
+        )
+    return [dict(r) for r in rows]
+
+
+async def create_agent(pool: asyncpg.Pool, name: str, email: str) -> dict:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO agents (name, email)
+            VALUES ($1, $2)
+            RETURNING id::TEXT, name, email, created_at
+            """,
+            name,
+            email,
+        )
+    return {**dict(row), "total_calls": 0, "completed_calls": 0}
+
+
+async def get_agent(pool: asyncpg.Pool, agent_id: str) -> dict | None:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT a.id::TEXT, a.name, a.email, a.created_at,
+                   COUNT(c.id) AS total_calls,
+                   COUNT(c.id) FILTER (WHERE c.status = 'extracted') AS completed_calls
+            FROM agents a LEFT JOIN calls c ON c.agent_id = a.id
+            WHERE a.id = $1::UUID
+            GROUP BY a.id
+            """,
+            agent_id,
+        )
+    return dict(row) if row else None
