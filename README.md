@@ -2,7 +2,7 @@
 
 > Outbound sales calls generate a paper trail that most teams can't safely keep.
 > The recording lands in cloud storage, a human or model transcribes it, and suddenly
-raw PHI — names, dates of birth, insurance IDs — is sitting in a database with no
+raw PHI (names, dates of birth, insurance IDs) is sitting in a database with no
 audit trail and no redaction. 
 Auris is a pipeline built to close that gap: every
 recording is transcribed, scrubbed of PHI before a single byte touches the database,
@@ -23,25 +23,25 @@ flowchart LR
     E --> G[React\ndashboard]
 ```
 
-Raw transcript text exists only inside the redaction step — it is never logged,
+Raw transcript text exists only inside the redaction step. It is never logged,
 stored, or forwarded. The redacted text written to the database is encrypted at rest
 with pgcrypto.
 
 ## Architecture
 
-**Monorepo — two runtimes, one database**
+**Monorepo: two runtimes, one database**
 `client/` is a React Router v7 SPA running on Node. `server/` is a FastAPI service
-running on Python 3.11. Both talk to the same local Postgres instance (Supabase-ready
-— a `DATABASE_URL` swap is the only migration needed).
+running on Python 3.11. Both talk to the same local Postgres instance (Supabase-ready;
+a `DATABASE_URL` swap is the only migration needed).
 
 **Dual-runtime auth without a token exchange**
 Better Auth runs inside the Node server and owns session creation. FastAPI validates
-sessions by querying the `sessions` table directly via asyncpg — no separate auth
+sessions by querying the `sessions` table directly via asyncpg. No separate auth
 service, no JWT round-trip. The browser cookie is the only credential that moves.
 
 **PHI boundary**
 `server/app/services/redaction.py` is the only file where raw transcript text exists.
-Every other layer — storage, extraction, the API, the dashboard — operates on redacted
+Every other layer (storage, extraction, the API, the dashboard) operates on redacted
 text only. This is enforced by design, not by policy.
 
 **Background pipeline, not a queue**
